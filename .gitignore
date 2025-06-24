@@ -12,3 +12,6 @@ wheels/
 # don't commit API keys
 /config.py
 .env
+
+# other
+/attic/
