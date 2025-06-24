@@ -1,0 +1,3 @@
+# https://programmablesearchengine.google.com/controlpanel
+api_key = "YOUR_API_KEY"
+cse_id = "YOUR_CSE_ID"

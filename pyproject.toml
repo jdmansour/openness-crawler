@@ -1,0 +1,14 @@
+[project]
+name = "baseline-openness"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-api-python-client>=2.173.0",
+]
+
+[dependency-groups]
+dev = [
+    "google-api-python-client-stubs>=1.29.0",
+]
