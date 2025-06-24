@@ -1,0 +1,36 @@
+{
+  "kind": "customsearch#result",
+  "title": "How to start Web scraping with python? : r/learnpython",
+  "htmlTitle": "How to start <b>Web scraping</b> with <b>python</b>? : r/<b>learnpython</b>",
+  "link": "https://www.reddit.com/r/learnpython/comments/qzr8ir/how_to_start_web_scraping_with_python/",
+  "displayLink": "www.reddit.com",
+  "snippet": "Nov 22, 2021 ... Learn the basic html elements that build up a website. Inspect the element on the webpage that you're trying to get data from. Use requests\u00a0...",
+  "htmlSnippet": "Nov 22, 2021 <b>...</b> Learn the basic html elements that build up a website. Inspect the element on the webpage that you&#39;re trying to get data from. Use requests&nbsp;...",
+  "formattedUrl": "https://www.reddit.com/.../learnpython/.../how_to_start_web_scraping_with...",
+  "htmlFormattedUrl": "https://www.reddit.com/.../learn<b>python</b>/.../how_to_start_<b>web</b>_<b>scraping</b>_with...",
+  "pagemap": {
+    "metatags": [
+      {
+        "og:image": "https://share.redd.it/preview/post/qzr8ir",
+        "theme-color": "#000000",
+        "og:image:width": "1200",
+        "og:type": "website",
+        "og:image:alt": "An image containing a preview of the post",
+        "twitter:card": "summary_large_image",
+        "twitter:title": "r/learnpython on Reddit: How to start Web scraping with python?",
+        "og:site_name": "Reddit",
+        "og:title": "r/learnpython on Reddit: How to start Web scraping with python?",
+        "og:image:height": "630",
+        "msapplication-navbutton-color": "#000000",
+        "og:description": "Posted by u/Youre_Dreaming - 203 votes and 85 comments",
+        "twitter:image": "https://share.redd.it/preview/post/qzr8ir",
+        "apple-mobile-web-app-status-bar-style": "black",
+        "twitter:site": "@reddit",
+        "viewport": "width=device-width, initial-scale=1, viewport-fit=cover",
+        "apple-mobile-web-app-capable": "yes",
+        "og:ttl": "600",
+        "og:url": "https://www.reddit.com/r/learnpython/comments/qzr8ir/how_to_start_web_scraping_with_python/"
+      }
+    ]
+  }
+}
