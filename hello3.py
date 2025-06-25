@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from typing import TYPE_CHECKING
 
 import dotenv
@@ -11,7 +12,17 @@ from crawl4ai.processors.pdf import (PDFContentScrapingStrategy,
 from googleapiclient.discovery import build
 from pydantic import BaseModel, TypeAdapter
 
+from cache_results import cache_results
 
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+# hide litellm and httpx logging
+logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
+
+
+@cache_results
 def google_search(query):
     api_key = dotenv.get_key(".env", "GOOGLE_API_KEY")
     cse_id = dotenv.get_key(".env", "GOOGLE_CSE_ID")
@@ -24,10 +35,13 @@ def google_search(query):
 
     return [item['link'] for item in res.get('items', [])]
 
+# TODO: in dem ergebnis das Dokument (URL) mitgeben
+# TODO: auch die zwischenergebnisse irgendwo hin loggen
 
 class LMSResult(BaseModel):
     reasoning: str
     software_usage_found: bool
+
 
 async def main():
     # site = "www.uni-kassel.de"
@@ -35,35 +49,40 @@ async def main():
     # software = "Moodle"
 
     unis = [
-        # ("www.uni-kassel.de", "Universität Kassel"),
-        # ("www.hfm-wuerzburg.de", "Hochschule für Musik Würzburg"),
-        # ("www.fh-aachen.de", "FH Aachen"),
-        # ("www.rwth-aachen.de", "RWTH Aachen"),
-        # ("www.hs-aalen.de", "Hochschule Aalen"),
-        ("www.uni-goettingen.de", "Universität Göttingen"),
+        ("uni-kassel.de", "Universität Kassel"),
+        ("hfm-wuerzburg.de", "Hochschule für Musik Würzburg"),
+        ("fh-aachen.de", "FH Aachen"),
+        ("rwth-aachen.de", "RWTH Aachen"),
+        ("hs-aalen.de", "Hochschule Aalen"),
+        ("uni-goettingen.de", "Universität Göttingen"),
     ]
 
     for site, einrichtung in unis:
-        for software in ["Moodle", "Ilias"]: # , "OpenOLAT", "Canvas", "Stud.IP"]:
-            results = google_search(f"site:{site} {software}")
+        # , "OpenOLAT", "Canvas", "Stud.IP"]:
+        for software in ["Moodle", "Ilias", "OpenOLAT"]:
+            results = google_search(f"site:{site} {software}", skip_cache=True)
 
             total_result = None
             for url in results[:5]:
-                print(url)
+                log.debug("Scraping url: %s", url)
                 result = await scrape_url(url, software=software, einrichtung=einrichtung)
-                #print(result)
+                # print(result)
                 if result.software_usage_found:
-                    print(f"{software} usage found in {url}: {result.reasoning}")
+                    # print(f"{software} usage found in {url}: {result.reasoning}")
                     total_result = result
                     break
 
-                print(f"No {software} usage found in {url}: {result.reasoning}")
+                # print(f"No {software} usage found in {url}: {result.reasoning}")
 
             if total_result is None:
-                total_result = LMSResult(reasoning="(No usage found in any document)", software_usage_found=False)
-            print("Final result:", total_result)
+                total_result = LMSResult(
+                    reasoning="(No usage found in any document)", software_usage_found=False)
+            # print("Final result:", total_result)
+            print(f"{einrichtung} - {software} usage:",
+                  total_result.software_usage_found)
 
 
+@cache_results
 async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM Würzburg") -> LMSResult:
     is_pdf = False
     if "dumpFile" in url or url.endswith(".pdf"):
@@ -75,8 +94,8 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
     model = "llama-3.1-sauerkrautlm-70b-instruct"
     # 1. Define the LLM extraction strategy
     llm_strategy = LLMExtractionStrategy(
-        llm_config = LLMConfig(provider="openai/llama-3.3-70b-instruct",
-                               base_url=base_url, api_token=api_key),
+        llm_config=LLMConfig(provider="openai/llama-3.3-70b-instruct",
+                             base_url=base_url, api_token=api_key),
         schema=LMSResult.model_json_schema(),
         extraction_type="schema",
         instruction=f"Finde heraus ob aus dem Text hervorgeht, dass {software} oder eine auf {software} basierende Software in der Einrichtung {einrichtung} genutzt wird. Antworte mit Wahr oder Falsch und gib eine kurze Begründung.",
@@ -99,7 +118,6 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
     # 3. Create a browser config if needed
     browser_cfg = BrowserConfig(headless=True)
 
-
     # pdf_url = "https://hfm-wuerzburg.de/admin/QM/pdf/HfM_Wegweiser_fuer_Lehrende_Stand_21.08.2024.docx.pdf"
 
     # crawler_strategy = PDFCrawlerStrategy()
@@ -117,9 +135,10 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         if not result.extracted_content:
             print("⚠️ No content extracted")
             return LMSResult(reasoning="(No content extracted)", software_usage_found=False)
-        
+
         try:
-            data = TypeAdapter(list[LMSResult]).validate_json(result.extracted_content)
+            data = TypeAdapter(list[LMSResult]).validate_json(
+                result.extracted_content)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON decoding error: {e}")
             print("Extracted content:", result.extracted_content)
@@ -140,7 +159,6 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         else:
             print("⚠️ No results found")
             return LMSResult(reasoning="(No results found)", software_usage_found=False)
-
 
 
 if __name__ == "__main__":
