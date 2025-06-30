@@ -1,4 +1,5 @@
 import asyncio
+import os
 import json
 import logging
 from typing import TYPE_CHECKING
@@ -48,14 +49,51 @@ async def main():
     # einrichtung = "Universität Kassel"
     # software = "Moodle"
 
-    unis = [
-        ("uni-kassel.de", "Universität Kassel"),
-        ("hfm-wuerzburg.de", "Hochschule für Musik Würzburg"),
-        ("fh-aachen.de", "FH Aachen"),
-        ("rwth-aachen.de", "RWTH Aachen"),
-        ("hs-aalen.de", "Hochschule Aalen"),
-        ("uni-goettingen.de", "Universität Göttingen"),
-    ]
+    filename = "../einrichtungen/data/hochschulen.csv"
+    if not os.path.exists(filename):
+        print(f"File {filename} does not exist.")
+        return
+    
+    # Hochschulname,Land,Hochschultyp,Trägerschaft,Promotionsrecht,Gründungsjahr(e),Anzahl Studierende,Mitgliedschaft HRK,website
+    # Medical School Berlin – Hochschule für Gesundheit und Medizin (MSB),BE,Fachhochschule / HAW,privat,nein,2012,2488,nein,http://www.medicalschool-berlin.de/
+    # Katholische Hochschule für Sozialwesen Berlin,BE,Fachhochschule / HAW,kirchlich,nein,1991,1235,"ja (Gruppe der Hochschulen für Angewandte Wissenschaften, Fachhochschulen)",https://www.khsb-berlin.de/
+    # International Psychoanalytic University Berlin,BE,Universität,privat,nein,2009,894,nein,https://www.ipu-berlin.de/
+    # IB Hochschule für Gesundheit und Soziales,BE,Fachhochschule / HAW,privat,nein,2006,776,nein,https://www.ib-hochschule.de/    
+
+    # parse csv
+    # get columns website and Hochschulname
+    # remove http(s):// and www. from website
+    import csv
+    import re
+    unis = []
+    with open(filename, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter=",")
+        for row in reader:
+            # Universität
+            if row.get("Hochschultyp", "").strip() != "Universität":
+                # print(f"Skipping row with Hochschultyp {row.get('Hochschultyp', '')}: {row}")
+                continue
+            website = row["website"].strip()
+            if not website:
+                print(f"Skipping row with empty website: {row}")
+                continue
+            # remove http(s):// and www.
+            website = re.sub(r"^https?://(www\.)?", "", website)
+            # remove trailing slash
+            website = website.rstrip("/")
+            # add to list
+            unis.append((website, row["Hochschulname"]))
+
+    print(f"Found {len(unis)} universities in {filename}")
+
+    # unis = [
+    #     ("uni-kassel.de", "Universität Kassel"),
+    #     ("hfm-wuerzburg.de", "Hochschule für Musik Würzburg"),
+    #     ("fh-aachen.de", "FH Aachen"),
+    #     ("rwth-aachen.de", "RWTH Aachen"),
+    #     ("hs-aalen.de", "Hochschule Aalen"),
+    #     ("uni-goettingen.de", "Universität Göttingen"),
+    # ]
 
     for site, einrichtung in unis:
         # , "OpenOLAT", "Canvas", "Stud.IP"]:
@@ -112,7 +150,7 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         # scraping_strategy=PDFContentScrapingStrategy(),
         scraping_strategy=scraping_strategy,
         extraction_strategy=llm_strategy,
-        cache_mode=CacheMode.DISABLED
+        cache_mode=CacheMode.DISABLED if is_pdf else CacheMode.ENABLED,
     )
 
     # 3. Create a browser config if needed
