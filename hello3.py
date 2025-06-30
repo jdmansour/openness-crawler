@@ -24,8 +24,10 @@ logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
+logging.getLogger('cache_results').setLevel(logging.DEBUG)
 
-@cache_results
+
+@cache_results(dummy_on_miss=[])
 def google_search(query):
     api_key = dotenv.get_key(".env", "GOOGLE_API_KEY")
     cse_id = dotenv.get_key(".env", "GOOGLE_CSE_ID")
@@ -55,6 +57,8 @@ async def main():
     if not os.path.exists(filename):
         log.error(f"File {filename} does not exist.")
         return
+    
+    output_file = "results.jsonlines"
     
     # Hochschulname,Land,Hochschultyp,Trägerschaft,Promotionsrecht,Gründungsjahr(e),Anzahl Studierende,Mitgliedschaft HRK,website
     # Medical School Berlin – Hochschule für Gesundheit und Medizin (MSB),BE,Fachhochschule / HAW,privat,nein,2012,2488,nein,http://www.medicalschool-berlin.de/
@@ -97,39 +101,40 @@ async def main():
     #     ("uni-goettingen.de", "Universität Göttingen"),
     # ]
 
-    for site, einrichtung in unis:
-        # , "OpenOLAT", "Canvas", "Stud.IP"]:
-        for software in ["Moodle", "Ilias", "OpenOLAT"]:
-            results = google_search(f"site:{site} {software}", skip_cache=True)
+    with open(output_file, "a", encoding="utf-8") as f:
+        for site, einrichtung in unis:
+            # , "OpenOLAT", "Canvas", "Stud.IP"]:
+            for software in ["Moodle", "Ilias", "OpenOLAT"]:
+                results = google_search(f"site:{site} {software}", skip_cache=False)
 
-            total_result = None
-            for url in results[:5]:
-                log.debug("Scraping url: %s", url)
-                result = await scrape_url(url, software=software, einrichtung=einrichtung)
-                # print(result)
-                if result.software_usage_found:
-                    # print(f"{software} usage found in {url}: {result.reasoning}")
-                    total_result = result
-                    break
+                total_result = None
+                for url in results[:5]:
+                    log.debug("Scraping url: %s", url)
+                    result = await scrape_url(url, software=software, einrichtung=einrichtung)
+                    # print(result)
+                    if result.software_usage_found:
+                        # print(f"{software} usage found in {url}: {result.reasoning}")
+                        total_result = result
+                        break
 
-                # print(f"No {software} usage found in {url}: {result.reasoning}")
+                    # print(f"No {software} usage found in {url}: {result.reasoning}")
 
-            if total_result is None:
-                total_result = LMSResult(
-                    reasoning="(No usage found in any document)", software_usage_found=False)
-            # print("Final result:", total_result)
-            # print(f"{einrichtung} - {software} usage:",
-            #       total_result.software_usage_found)
-            log.info("%s - %s usage: %s", einrichtung, software, total_result.software_usage_found)
-            
-            item = {
-                "einrichtung": einrichtung,
-                "software": software,
-                "usage_found": total_result.software_usage_found,
-                "reasoning": total_result.reasoning
-            }
-            # print as json
-            print(json.dumps(item, ensure_ascii=False, indent=2))
+                if total_result is None:
+                    total_result = LMSResult(
+                        reasoning="(No usage found in any document)", software_usage_found=False)
+                # print("Final result:", total_result)
+                # print(f"{einrichtung} - {software} usage:",
+                #       total_result.software_usage_found)
+                log.info("%s - %s usage: %s", einrichtung, software, total_result.software_usage_found)
+                
+                item = {
+                    "einrichtung": einrichtung,
+                    "software": software,
+                    "usage_found": total_result.software_usage_found,
+                    "reasoning": total_result.reasoning
+                }
+                # print as json
+                print(json.dumps(item, ensure_ascii=False, indent=2), file=f, flush=True)
 
 
 @cache_results
@@ -174,7 +179,7 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
     crawler_strategy = PDFCrawlerStrategy() if is_pdf else None
 
     async with AsyncWebCrawler(crawler_strategy=crawler_strategy) as crawler:
-        cast(AsyncLogger, crawler.logger).console.file = sys.stderr
+        # cast(AsyncLogger, crawler.logger).console.file = sys.stderr
 
         # 4. Let's say we want to crawl a single page
         result = await crawler.arun(
