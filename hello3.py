@@ -1,13 +1,15 @@
 import asyncio
-import os
 import json
 import logging
-from typing import TYPE_CHECKING
+import os
+import sys
+from typing import TYPE_CHECKING, cast
 
 import dotenv
 from crawl4ai import (AsyncWebCrawler, BrowserConfig, CacheMode,
                       CrawlerRunConfig, CrawlResult, LLMConfig,
                       LLMExtractionStrategy)
+from crawl4ai import AsyncLogger
 from crawl4ai.processors.pdf import (PDFContentScrapingStrategy,
                                      PDFCrawlerStrategy)
 from googleapiclient.discovery import build
@@ -31,8 +33,8 @@ def google_search(query):
     res = service.cse().list(q=query, cx=cse_id, num=10).execute()
 
     if len(res.get('items', [])) == 0:
-        print(f"No results found for query: {query}")
-        print("response:", res)
+        log.warning(f"No results found for query: {query}")
+        log.warning("response:", res)
 
     return [item['link'] for item in res.get('items', [])]
 
@@ -51,7 +53,7 @@ async def main():
 
     filename = "../einrichtungen/data/hochschulen.csv"
     if not os.path.exists(filename):
-        print(f"File {filename} does not exist.")
+        log.error(f"File {filename} does not exist.")
         return
     
     # Hochschulname,Land,Hochschultyp,Trägerschaft,Promotionsrecht,Gründungsjahr(e),Anzahl Studierende,Mitgliedschaft HRK,website
@@ -75,7 +77,7 @@ async def main():
                 continue
             website = row["website"].strip()
             if not website:
-                print(f"Skipping row with empty website: {row}")
+                log.warning(f"Skipping row with empty website: {row}")
                 continue
             # remove http(s):// and www.
             website = re.sub(r"^https?://(www\.)?", "", website)
@@ -84,7 +86,7 @@ async def main():
             # add to list
             unis.append((website, row["Hochschulname"]))
 
-    print(f"Found {len(unis)} universities in {filename}")
+    log.info(f"Found {len(unis)} universities in {filename}")
 
     # unis = [
     #     ("uni-kassel.de", "Universität Kassel"),
@@ -116,8 +118,18 @@ async def main():
                 total_result = LMSResult(
                     reasoning="(No usage found in any document)", software_usage_found=False)
             # print("Final result:", total_result)
-            print(f"{einrichtung} - {software} usage:",
-                  total_result.software_usage_found)
+            # print(f"{einrichtung} - {software} usage:",
+            #       total_result.software_usage_found)
+            log.info("%s - %s usage: %s", einrichtung, software, total_result.software_usage_found)
+            
+            item = {
+                "einrichtung": einrichtung,
+                "software": software,
+                "usage_found": total_result.software_usage_found,
+                "reasoning": total_result.reasoning
+            }
+            # print as json
+            print(json.dumps(item, ensure_ascii=False, indent=2))
 
 
 @cache_results
@@ -162,6 +174,8 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
     crawler_strategy = PDFCrawlerStrategy() if is_pdf else None
 
     async with AsyncWebCrawler(crawler_strategy=crawler_strategy) as crawler:
+        cast(AsyncLogger, crawler.logger).console.file = sys.stderr
+
         # 4. Let's say we want to crawl a single page
         result = await crawler.arun(
             url=url,
@@ -171,31 +185,31 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
             assert isinstance(result, CrawlResult)
 
         if not result.extracted_content:
-            print("⚠️ No content extracted")
+            log.warning("⚠️ No content extracted")
             return LMSResult(reasoning="(No content extracted)", software_usage_found=False)
 
         try:
             data = TypeAdapter(list[LMSResult]).validate_json(
                 result.extracted_content)
         except json.JSONDecodeError as e:
-            print(f"⚠️ JSON decoding error: {e}")
-            print("Extracted content:", result.extracted_content)
+            log.warning(f"⚠️ JSON decoding error: {e}")
+            log.warning("Extracted content:", result.extracted_content)
             return LMSResult(reasoning="(JSON decoding error)", software_usage_found=False)
         except Exception as e:
-            print(f"⚠️ Error validating JSON: {e}")
-            print("Extracted content:", result.extracted_content)
+            log.warning(f"⚠️ Error validating JSON: {e}")
+            log.warning("Extracted content:", result.extracted_content)
             return LMSResult(reasoning="(Error validating JSON)", software_usage_found=False)
 
         # if there is a positive result in any chunk, then we have a positive result
         for item in data:
             if item.software_usage_found:
-                print(f"{software} usage found: {item.reasoning}")
+                log.warning(f"{software} usage found: {item.reasoning}")
                 return item
 
         if data:
             return data[0]  # return the first item if no positive result found
         else:
-            print("⚠️ No results found")
+            log.warning("⚠️ No results found")
             return LMSResult(reasoning="(No results found)", software_usage_found=False)
 
 
