@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 from typing import TYPE_CHECKING, cast
 
 import dotenv
@@ -26,7 +27,60 @@ logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 logging.getLogger('cache_results').setLevel(logging.DEBUG)
 
+def record_results(func):
+    """
+    Decorator to record the results of a function call.
+    For a function like `google_search`, the results are of the form:
+    {
+        "cache_hit": false,
+        "args": {
+            "query": "site:example.com moodle"
+        },
+        "return": [
+            "https://example.com/moodle",
+            "https://example.com/moodle2"
+        ]
+    }
+    For each run of the program, a new file is created:
+    `results/<function_name>_<timestamp>.json`
+    """
+    # dummy value for cache hit for now
+    #cache_hit = False
 
+    # store the invocation time in the decorator object, if not set
+    # we use this to create a unique time for each run
+    if not hasattr(record_results, 'init_time'):
+        record_results.init_time = time.strftime("%Y%m%d_%H%M%S")
+    results_dir = "results"
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+    def wrapper(*args, **kwargs):
+        #nonlocal cache_hit
+        # call the function
+        kwargs['cache_return_info'] = True
+        result, cache_hit = func(*args, **kwargs)
+
+        # create a unique filename based on the function name and invocation time
+        filename = f"{results_dir}/{func.__name__}_{record_results.init_time}.json"
+        
+        # prepare the result data
+        result_data = {
+            "cache_hit": cache_hit,
+            "args": {k: v for k, v in zip(func.__code__.co_varnames, args)},
+            "return": result
+        }
+
+        # write the result to a file
+        with open(filename, 'a', encoding='utf-8') as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+
+        return result
+    return wrapper
+
+
+@record_results
 @cache_results(dummy_on_miss=[])
 def google_search(query):
     api_key = dotenv.get_key(".env", "GOOGLE_API_KEY")
@@ -110,14 +164,14 @@ async def main():
                 total_result = None
                 for url in results[:5]:
                     log.debug("Scraping url: %s", url)
-                    result = await scrape_url(url, software=software, einrichtung=einrichtung)
-                    # print(result)
+                    result = await scrape_url(url, software=software, einrichtung=einrichtung, skip_cache=True)
+                    log.debug(result)
                     if result.software_usage_found:
-                        # print(f"{software} usage found in {url}: {result.reasoning}")
+                        log.debug(f"{software} usage found in {url}: {result.reasoning}")
                         total_result = result
                         break
 
-                    # print(f"No {software} usage found in {url}: {result.reasoning}")
+                    log.debug(f"No {software} usage found in {url}: {result.reasoning}")
 
                 if total_result is None:
                     total_result = LMSResult(
@@ -137,6 +191,7 @@ async def main():
                 print(json.dumps(item, ensure_ascii=False, indent=2), file=f, flush=True)
 
 
+@record_results
 @cache_results
 async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM Würzburg") -> LMSResult:
     is_pdf = False
