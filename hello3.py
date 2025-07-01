@@ -17,17 +17,23 @@ from googleapiclient.discovery import build
 from pydantic import BaseModel, TypeAdapter
 
 from cache_results import cache_results
+# import litellm
+# litellm._turn_on_debug()
 
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 # hide litellm and httpx logging
 logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
-logging.getLogger('cache_results').setLevel(logging.DEBUG)
+# logging.getLogger('cache_results').setLevel(logging.DEBUG)
 
-def record_results(func):
+from utils import sync_async_decorator
+
+@sync_async_decorator
+def record_results(func, *args, **kwargs):
     """
     Decorator to record the results of a function call.
     For a function like `google_search`, the results are of the form:
@@ -44,41 +50,42 @@ def record_results(func):
     For each run of the program, a new file is created:
     `results/<function_name>_<timestamp>.json`
     """
-    # dummy value for cache hit for now
-    #cache_hit = False
+    kwargs['cache_return_info'] = True
+    # call wrapped function
+    inner_result = yield args, kwargs
+    print("Inner result:", inner_result)
+    result, cache_hit = inner_result
+    
+    if isinstance(result, BaseModel):
+        # if the result is a Pydantic model, convert it to a dict
+        result_dict = result.model_dump(mode="json")
+    else:
+        result_dict = result
 
-    # store the invocation time in the decorator object, if not set
-    # we use this to create a unique time for each run
-    if not hasattr(record_results, 'init_time'):
-        record_results.init_time = time.strftime("%Y%m%d_%H%M%S")
+    # prepare the result data
+    result_data = {
+        "cache_hit": cache_hit,
+        "args": {k: v for k, v in zip(func.__code__.co_varnames, args)},
+        "return": result_dict
+    }
+
     results_dir = "results"
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
-    def wrapper(*args, **kwargs):
-        #nonlocal cache_hit
-        # call the function
-        kwargs['cache_return_info'] = True
-        result, cache_hit = func(*args, **kwargs)
+    # create a unique filename based on the function name and execution time
+    filename = f"{results_dir}/{func.__name__}_{record_results.init_time}.json"
 
-        # create a unique filename based on the function name and invocation time
-        filename = f"{results_dir}/{func.__name__}_{record_results.init_time}.json"
-        
-        # prepare the result data
-        result_data = {
-            "cache_hit": cache_hit,
-            "args": {k: v for k, v in zip(func.__code__.co_varnames, args)},
-            "return": result
-        }
+    # write the result to a file
+    with open(filename, 'a', encoding='utf-8') as f:
+        # if result_data is a Pydantic model, convert it to a dict
+        json.dump(result_data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
 
-        # write the result to a file
-        with open(filename, 'a', encoding='utf-8') as f:
-            json.dump(result_data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+    return result
 
-        return result
-    return wrapper
-
+if not hasattr(record_results, 'init_time'):
+    record_results.init_time = time.strftime("%Y%m%d_%H%M%S")
 
 @record_results
 @cache_results(dummy_on_miss=[])
@@ -131,8 +138,10 @@ async def main():
         for row in reader:
             # Universität
             if row.get("Hochschultyp", "").strip() != "Universität":
-                # print(f"Skipping row with Hochschultyp {row.get('Hochschultyp', '')}: {row}")
                 continue
+            if not "Göttingen" in row.get("Hochschulname", ""):
+                continue
+
             website = row["website"].strip()
             if not website:
                 log.warning(f"Skipping row with empty website: {row}")
@@ -193,7 +202,8 @@ async def main():
 
 @record_results
 @cache_results
-async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM Würzburg") -> LMSResult:
+async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM Würzburg", skip_cache=False) -> LMSResult:
+    log.info(f"Scraping URL: {url} for {software} usage in {einrichtung}")
     is_pdf = False
     if "dumpFile" in url or url.endswith(".pdf"):
         # hack hack hack
@@ -207,10 +217,11 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         llm_config=LLMConfig(provider="openai/llama-3.3-70b-instruct",
                              base_url=base_url, api_token=api_key),
         schema=LMSResult.model_json_schema(),
+        verbose=True,
         extraction_type="schema",
         instruction=f"Finde heraus ob aus dem Text hervorgeht, dass {software} oder eine auf {software} basierende Software in der Einrichtung {einrichtung} genutzt wird. Antworte mit Wahr oder Falsch und gib eine kurze Begründung.",
-        chunk_token_threshold=2000,
-        overlap_rate=0.1,
+        chunk_token_threshold=1000,
+        overlap_rate=0.05,
         apply_chunking=True,
         input_format="markdown",   # or "html", "fit_markdown"
         extra_args={"temperature": 0.0, "max_tokens": 800}
@@ -223,6 +234,8 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         scraping_strategy=scraping_strategy,
         extraction_strategy=llm_strategy,
         cache_mode=CacheMode.DISABLED if is_pdf else CacheMode.ENABLED,
+        verbose=True,
+        log_console=True,
     )
 
     # 3. Create a browser config if needed
@@ -237,10 +250,12 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         # cast(AsyncLogger, crawler.logger).console.file = sys.stderr
 
         # 4. Let's say we want to crawl a single page
+        log.info("Scraping URL: %s", url)
         result = await crawler.arun(
             url=url,
             config=crawl_config
         )
+        log.info("URL scraped: %s", url)
         if TYPE_CHECKING:
             assert isinstance(result, CrawlResult)
 
