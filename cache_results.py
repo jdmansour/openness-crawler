@@ -1,8 +1,6 @@
-import asyncio
 import json
 import os
 import pickle
-from functools import wraps
 import logging
 from utils import sync_async_decorator
 
@@ -49,25 +47,25 @@ def cache_results(name=None, dummy_on_miss=UNSET):
             result = cache[key]
             log.debug("Returning cached result")
             return add_info(result, 'hit')
+
+        if skip_cache:
+            log.debug(f"Skipping cache for {name} with args: {args}, kwargs: {kwargs}")
         else:
-            if skip_cache:
-                log.debug(f"Skipping cache for {name} with args: {args}, kwargs: {kwargs}")
-            else:
-                log.debug(f"Cache miss for {name} with args: {args}, kwargs: {kwargs}")
+            log.debug(f"Cache miss for {name} with args: {args}, kwargs: {kwargs}")
 
-            if dummy_on_miss is not UNSET:
-                log.debug(f"Returning dummy value for {name} with args: {args}, kwargs: {kwargs}")
-                return add_info(dummy_on_miss, 'dummy')
-            
-            # call the wrapped function
-            result = yield args, kwargs
-        
-            # store the result in cache
-            cache[key] = result
-            with open(cache_file, 'wb') as f:
-                pickle.dump(cache, f)
+        if dummy_on_miss is not UNSET:
+            log.debug(f"Returning dummy value for {name} with args: {args}, kwargs: {kwargs}")
+            return add_info(dummy_on_miss, 'dummy')
 
-            return add_info(result, 'skip' if skip_cache else 'miss')
+        # call the wrapped function
+        result = yield args, kwargs
+
+        # store the result in cache
+        cache[key] = result
+        with open(cache_file, 'wb') as f:
+            pickle.dump(cache, f)
+
+        return add_info(result, 'skip' if skip_cache else 'miss')
 
     # if the parameter is a function, we called this without parentheses
     # so just run the decorator directly

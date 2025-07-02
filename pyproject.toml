@@ -16,4 +16,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "google-api-python-client-stubs>=1.29.0",
+    "pylint>=3.3.7",
+    "ruff>=0.12.1",
+]
+
+[tool.pylint."messages control"]
+disable = [
+    "logging-fstring-interpolation",
 ]
