@@ -88,7 +88,7 @@ if not hasattr(record_results, 'init_time'):
     record_results.init_time = time.strftime("%Y%m%d_%H%M%S")
 
 @record_results
-@cache_results(dummy_on_miss=[])
+@cache_results#(dummy_on_miss=[])
 def google_search(query):
     api_key = dotenv.get_key(".env", "GOOGLE_API_KEY")
     cse_id = dotenv.get_key(".env", "GOOGLE_CSE_ID")
@@ -139,7 +139,8 @@ async def main():
             # Universität
             if row.get("Hochschultyp", "").strip() != "Universität":
                 continue
-            if not "Göttingen" in row.get("Hochschulname", ""):
+            if not "Hannover" in row.get("Hochschulname", ""):
+            # if not "Göttingen" in row.get("Hochschulname", ""):
                 continue
 
             website = row["website"].strip()
@@ -170,31 +171,55 @@ async def main():
             for software in ["Moodle", "Ilias", "OpenOLAT"]:
                 results = google_search(f"site:{site} {software}", skip_cache=False)
 
-                total_result = None
+                combined_reasoning = {}
+                combined_verdict = False
+                scraping_results = []
                 for url in results[:5]:
                     log.debug("Scraping url: %s", url)
                     result = await scrape_url(url, software=software, einrichtung=einrichtung, skip_cache=True)
+                    scraping_results.append(result)
                     log.debug(result)
                     if result.software_usage_found:
                         log.debug(f"{software} usage found in {url}: {result.reasoning}")
-                        total_result = result
+                        combined_reasoning = result.reasoning
+                        combined_verdict = True
+                        # exit early
                         break
 
                     log.debug(f"No {software} usage found in {url}: {result.reasoning}")
 
-                if total_result is None:
-                    total_result = LMSResult(
-                        reasoning="(No usage found in any document)", software_usage_found=False)
-                # print("Final result:", total_result)
-                # print(f"{einrichtung} - {software} usage:",
-                #       total_result.software_usage_found)
-                log.info("%s - %s usage: %s", einrichtung, software, total_result.software_usage_found)
+                if not combined_verdict:
+                    # combined_reasoning = "No usage found in any document. Tried:"
+                    # combined_reasoning += "; ".join(r.reasoning for r in scraping_results)
+                    combined_reasoning = {
+                        'summary': f"Found no evidence of {software} usage in documents",
+                        'inputs': [
+                            {
+                                'url': url,
+                                'reasoning': r.reasoning
+                            } for url, r in zip(results[:5], scraping_results)
+                        ]
+                    }
+                else:
+                    # combined_reasoning = f"Found {software} usage in {einrichtung}:"
+                    # combined_reasoning = "; ".join(r.reasoning for r in scraping_results)
+                    combined_reasoning = {
+                        'summary': f"Found evidence of {software} usage in documents",
+                        'inputs': [
+                            {
+                                'url': url,
+                                'reasoning': r.reasoning
+                            } for url, r in zip(results[:5], scraping_results)
+                        ]
+                    }
+
+                log.info("%s - %s usage: %s", einrichtung, software, combined_verdict)
                 
                 item = {
                     "einrichtung": einrichtung,
                     "software": software,
-                    "usage_found": total_result.software_usage_found,
-                    "reasoning": total_result.reasoning
+                    "usage_found": combined_verdict,
+                    "reasoning": combined_reasoning
                 }
                 # print as json
                 print(json.dumps(item, ensure_ascii=False, indent=2), file=f, flush=True)
@@ -259,6 +284,11 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         if TYPE_CHECKING:
             assert isinstance(result, CrawlResult)
 
+        # log usage:
+        log.info("LLM usage: %s", llm_strategy.usages)
+        log.info("LLM usage: %s", llm_strategy.total_usage)
+        llm_strategy.show_usage()
+
         if not result.extracted_content:
             log.warning("⚠️ No content extracted")
             return LMSResult(reasoning="(No content extracted)", software_usage_found=False)
@@ -275,17 +305,23 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
             log.warning("Extracted content:", result.extracted_content)
             return LMSResult(reasoning="(Error validating JSON)", software_usage_found=False)
 
-        # if there is a positive result in any chunk, then we have a positive result
+        chunks = []
         for item in data:
-            if item.software_usage_found:
-                log.warning(f"{software} usage found: {item.reasoning}")
-                return item
+            chunks.append({
+                "software_usage_found": item.software_usage_found,
+                "reasoning": item.reasoning
+            })
 
-        if data:
-            return data[0]  # return the first item if no positive result found
+        positive_reasonings = [item.reasoning for item in data if item.software_usage_found]
+        usage_found = len(positive_reasonings) > 0
+        if usage_found:
+            # reasoning = f"URL: {url};"
+            reasoning = "; ".join(positive_reasonings)
         else:
-            log.warning("⚠️ No results found")
-            return LMSResult(reasoning="(No results found)", software_usage_found=False)
+            # reasoning = f"URL: {url};"
+            reasoning = "No mention found."
+
+        return LMSResult(reasoning=reasoning, software_usage_found=usage_found)
 
 
 if __name__ == "__main__":
