@@ -33,9 +33,12 @@ logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 @record_results
 @cache_results  # (dummy_on_miss=[])
-def google_search(query, skip_cache=False):
+def google_search(query: str, skip_cache=False) -> list[str]:
     api_key = dotenv.get_key(".env", "GOOGLE_API_KEY")
     cse_id = dotenv.get_key(".env", "GOOGLE_CSE_ID")
+    if not api_key or not cse_id:
+        log.error("Missing GOOGLE_API_KEY or GOOGLE_CSE_ID in .env file")
+        return []
     service = build("customsearch", "v1", developerKey=api_key)
     res = service.cse().list(q=query, cx=cse_id, num=10).execute()
 
