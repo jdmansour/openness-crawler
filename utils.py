@@ -13,6 +13,7 @@
 import asyncio
 import functools
 from contextlib import contextmanager
+import json
 import logging
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,61 @@ def sync_async_decorator(decorator_logic):
                     return exc.value
         return wrapper
     return decorator
+
+
+def parse_json_objects(filename):
+    """
+    Parst JSON-Objekte aus einer Datei, die mehrere JSON-Objekte enthält
+    (nicht durch Zeilenumbrüche getrennt), von öffnender zu schließender Klammer.
+    """
+
+    with open(filename, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    i = 0
+    while i < len(content):
+        # Überspringe Whitespace
+        while i < len(content) and content[i].isspace():
+            i += 1
+
+        if i >= len(content):
+            break
+
+        # Suche nach öffnender Klammer
+        if content[i] == '{':
+            start = i
+            brace_count = 0
+            in_string = False
+            escape_next = False
+
+            while i < len(content):
+                char = content[i]
+
+                if escape_next:
+                    escape_next = False
+                elif char == '\\':
+                    escape_next = True
+                elif char == '"' and not escape_next:
+                    in_string = not in_string
+                elif not in_string:
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            # Gefunden: komplettes JSON-Objekt
+                            json_str = content[start:i+1]
+                            try:
+                                json_obj = json.loads(json_str)
+                                yield json_obj
+                            except json.JSONDecodeError as e:
+                                print(f"Fehler beim Parsen von JSON: {e}")
+                                print(f"JSON-String: {json_str[:100]}...")
+                            break
+
+                i += 1
+
+        i += 1
 
     # cm = contextmanager(decorator_logic)
     # def decorator(func):
