@@ -17,6 +17,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from cache_results import cache_results
 from record_results import record_results
+from utils import parse_json_objects
 
 # import litellm
 # litellm._turn_on_debug()
@@ -44,7 +45,7 @@ def google_search(query: str, skip_cache=False) -> list[str]:
 
     if len(res.get('items', [])) == 0:
         log.warning(f"No results found for query: {query}")
-        log.warning("response:", res)
+        log.warning("response: %s", res)
 
     return [item['link'] for item in res.get('items', [])]
 
@@ -69,6 +70,16 @@ async def main():
 
     output_file = "results.jsonlines"
 
+    combos_done = set()
+    if os.path.exists(output_file):
+        objs = parse_json_objects(output_file)
+        for obj in objs:
+            einrichtung = obj.get("einrichtung", "")
+            software = obj.get("software", "")
+            if einrichtung and software:
+                combos_done.add((einrichtung, software))
+
+    # return
     # Hochschulname,Land,Hochschultyp,Trägerschaft,Promotionsrecht,Gründungsjahr(e),Anzahl Studierende,Mitgliedschaft HRK,website
     # Medical School Berlin – Hochschule für Gesundheit und Medizin (MSB),BE,Fachhochschule / HAW,privat,nein,2012,2488,nein,http://www.medicalschool-berlin.de/
     # Katholische Hochschule für Sozialwesen Berlin,BE,Fachhochschule / HAW,kirchlich,nein,1991,1235,"ja (Gruppe der Hochschulen für Angewandte Wissenschaften, Fachhochschulen)",https://www.khsb-berlin.de/
@@ -85,9 +96,9 @@ async def main():
             # Universität
             if row.get("Hochschultyp", "").strip() != "Universität":
                 continue
-            if "Hannover" not in row.get("Hochschulname", ""):
-                # if not "Göttingen" in row.get("Hochschulname", ""):
-                continue
+            # if "Hannover" not in row.get("Hochschulname", ""):
+            #     # if not "Göttingen" in row.get("Hochschulname", ""):
+            #     continue
 
             website = row["website"].strip()
             if not website:
@@ -115,6 +126,10 @@ async def main():
         for site, einrichtung in unis:
             # , "OpenOLAT", "Canvas", "Stud.IP"]:
             for software in ["Moodle", "Ilias", "OpenOLAT"]:
+                if (einrichtung, software) in combos_done:
+                    log.info(f"Skipping {einrichtung} - {software}, already done")
+                    continue
+
                 # Step 1: Google search
                 results = google_search(
                     f"site:{site} {software}", skip_cache=False)
