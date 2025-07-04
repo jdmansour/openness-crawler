@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import dotenv
 from crawl4ai import (AsyncWebCrawler, CacheMode,
@@ -19,17 +19,18 @@ from cache_results import cache_results
 from record_results import record_results
 from utils import parse_json_objects
 
-# import litellm
-# litellm._turn_on_debug()
 
+import litellm
+litellm._turn_on_debug()
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 # hide litellm and httpx logging
-logging.getLogger("LiteLLM").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("LiteLLM").setLevel(logging.DEBUG)
+# logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 # logging.getLogger('cache_results').setLevel(logging.DEBUG)
+
 
 
 @record_results
@@ -56,9 +57,33 @@ def google_search(query: str, skip_cache=False) -> list[str]:
 class LMSResult(BaseModel):
     reasoning: str
     software_usage_found: bool
+    error: Literal[False] = False
 
+class ErrorBlock(BaseModel):
+    index: int
+    error: Literal[True] = True
+    tags: list[str]
+    content: str
+    # {
+    #     "index": 11,
+    #     "error": true,
+    #     "tags": [
+    #         "error"
+    #     ],
+    #     "content": "litellm.RateLimitError: RateLimitError: OpenAIException - API rate limit exceeded"
+    # },
 
 async def main():
+
+    # url = "https://www.ub.tu-clausthal.de/en/publishing-open-access/publish-open-access/open-access-policy-and-strategy-of-the-technischen-universitaet-clausthal"
+    # software = "OpenOLAT" 
+    # uni = "Technische Universität Clausthal"
+
+    # result = await scrape_url(url, software=software, einrichtung=uni, skip_cache=True)
+    # log.info("Result: %s", result)
+
+    # return
+
     # site = "www.uni-kassel.de"
     # einrichtung = "Universität Kassel"
     # software = "Moodle"
@@ -213,7 +238,7 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
     crawl_config = CrawlerRunConfig(
         scraping_strategy=scraping_strategy,  # type: ignore
         extraction_strategy=llm_strategy,
-        cache_mode=CacheMode.DISABLED if is_pdf else CacheMode.ENABLED,
+        cache_mode=CacheMode.DISABLED if is_pdf else CacheMode.WRITE_ONLY,
         verbose=True,
         log_console=True,
     )
@@ -234,35 +259,53 @@ async def scrape_url(url: str, software: str = "Moodle", einrichtung: str = "HfM
         if TYPE_CHECKING:
             assert isinstance(result, CrawlResult)
 
-        log.info("LLM usage: %s", llm_strategy.usages)
-        log.info("LLM usage: %s", llm_strategy.total_usage)
-        llm_strategy.show_usage()
+        # log.info("LLM usage: %s", llm_strategy.usages)
+        # log.info("LLM usage: %s", llm_strategy.total_usage)
+        # llm_strategy.show_usage()
 
         if not result.extracted_content:
             log.warning("⚠️ No content extracted")
             return LMSResult(reasoning="(No content extracted)", software_usage_found=False)
 
+
+        log.info("result.error_message: %s", result.error_message)
+        log.info("result.extracted_content: %s", result.extracted_content[:1000])
+
         try:
-            data = TypeAdapter(list[LMSResult]).validate_json(
+            data = TypeAdapter(list[LMSResult|ErrorBlock]).validate_json(
                 result.extracted_content)
         except json.JSONDecodeError as e:
             log.warning(f"⚠️ JSON decoding error: {e}")
+            log.warning("The extracted content might not be valid JSON.")
             log.warning("Extracted content: %s", result.extracted_content)
+            raise
             return LMSResult(reasoning="(JSON decoding error)", software_usage_found=False)
         except Exception as e:
             log.warning(f"⚠️ Error validating JSON: {e}")
             log.warning("Extracted content: %s", result.extracted_content)
+            raise
             return LMSResult(reasoning="(Error validating JSON)", software_usage_found=False)
 
-        # combine chunks into a single reasoning
-        chunks = []
-        for item in data:
-            chunks.append({
-                "software_usage_found": item.software_usage_found,
-                "reasoning": item.reasoning
-            })
+        # # combine chunks into a single reasoning
+        # chunks = []
+        # for item in data:
+        #     if isinstance(item, ErrorBlock):
+        #         raise RuntimeError(
+        #             f"Error in block {item.index}: {item.content}")
+            
+        #     chunks.append({
+        #         "software_usage_found": item.software_usage_found,
+        #         "reasoning": item.reasoning
+        #     })
 
-        positive = [i.reasoning for i in data if i.software_usage_found]
+        positive: list[str] = []
+        for item in data:
+            if isinstance(item, ErrorBlock):
+                raise RuntimeError(
+                    f"Error in block {item.index}: {item.content}")
+            if item.software_usage_found:
+                positive.append(item.reasoning)
+
         usage_found = len(positive) > 0
         if usage_found:
             # reasoning = f"URL: {url};"
