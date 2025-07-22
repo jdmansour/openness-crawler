@@ -20,13 +20,14 @@ from record_results import record_results
 from utils import parse_json_objects
 
 
-import litellm
-litellm._turn_on_debug()
+# import litellm
+# litellm._turn_on_debug()
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 log = logging.getLogger(__name__)
 # hide litellm and httpx logging
-logging.getLogger("LiteLLM").setLevel(logging.DEBUG)
+logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+# logging.getLogger("LiteLLM").setLevel(logging.DEBUG)
 # logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 # logging.getLogger('cache_results').setLevel(logging.DEBUG)
