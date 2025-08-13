@@ -126,7 +126,8 @@ async def main():
     prompt_template = "Finde heraus ob aus dem Text hervorgeht, dass {software} oder eine auf {software} basierende Software in der Einrichtung {einrichtung} genutzt wird. Antworte mit Wahr oder Falsch und gib eine kurze Begründung."
 
 
-    for item in unis:
+    for index, item in enumerate(unis):
+        print(f"Processing {index + 1}/{len(unis)}: {item['name']} ({item['website']})")
         site = item["website"]
         einrichtung = item["name"]
 
