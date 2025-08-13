@@ -53,7 +53,7 @@ async def scrape_url(url: str, prompt_template: str, arguments: dict, skip_cache
     else:
         extra_args = {
             "temperature": 1,
-            "max_completion_tokens": 800,
+            # "max_completion_tokens": 800,
         }
     llm_strategy = ChunkLimitedLLMExtractionStrategy(
         llm_config=LLMConfig(provider=provider, base_url=base_url, api_token=api_key),
