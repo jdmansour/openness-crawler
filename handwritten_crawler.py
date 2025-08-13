@@ -11,6 +11,9 @@ from crawler.scraper import scrape_url
 from crawler.search.google import google_search
 from utils import parse_json_objects
 
+# For unpickling the cached results
+from crawler.scraper import LMSResult
+
 # import litellm
 # litellm._turn_on_debug()
 
