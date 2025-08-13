@@ -17,14 +17,23 @@
 #   "reasoning": "(No usage found in any document)"
 # }
 
+import sys
 import os
 import pandas as pd
 from collections import defaultdict
 
 from utils import parse_json_objects
 
+from openpyxl.formatting import Rule
+from openpyxl.formatting.rule import CellIsRule
+
+from openpyxl.styles import Font, PatternFill, Border
+from openpyxl.worksheet.cell_range import MultiCellRange
+from openpyxl.styles.differential import DifferentialStyle
+
 def main():
-    filename = "results2.jsonlines"
+    #filename = "results2.jsonlines"
+    filename = sys.argv[1]
 
     # nested dict
     # data[einrichtung][software] = {
@@ -60,9 +69,11 @@ def main():
         print()
 
     # Excel-Export
-    create_excel_report(data)
+    excel_filename = os.path.splitext(filename)[0] + "_report.xlsx"
+    print(f"Erstelle Excel-Bericht: {excel_filename}")
+    create_excel_report(data, excel_filename)
 
-def create_excel_report(data):
+def create_excel_report(data, output_filename: str):
     """Erstellt eine Excel-Tabelle mit Einrichtungen als Zeilen und Software-Programmen als Spalten"""
     
     # Sammle alle einzigartigen Software-Programme
@@ -91,10 +102,60 @@ def create_excel_report(data):
     df = pd.DataFrame(rows)
     
     # Speichere als Excel-Datei
-    output_filename = "software_usage_report.xlsx"
     df.to_excel(output_filename, index=False, engine='openpyxl')
     print(f"Excel-Bericht erstellt: {output_filename}")
     
+
+    # Formatiere die Tabelle:
+    # Spalte A: Breite 76
+    # Spalten B, E, G: Breite 30
+    with pd.ExcelWriter(output_filename, engine='openpyxl', mode='a') as writer:
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+        
+        # Setze Spaltenbreiten
+        worksheet.column_dimensions['A'].width = 76
+        worksheet.column_dimensions['C'].width = 30
+        worksheet.column_dimensions['E'].width = 30
+        worksheet.column_dimensions['G'].width = 30
+        
+        # Setze Überschriften fett
+        for cell in worksheet[1]:
+            cell.font = cell.font.copy(bold=True)
+
+        # Bedingte formatierung für Spalten B, D, F:
+        # Wenn der inhalt yes ist, hinterlege die Zelle grün
+        # Wenn der Inhalt no ist, hinterlege die Zelle rot
+
+        #for col in ['B', 'D', 'F']:
+    
+        # Standard Excel palette colors (indexed)
+        green_fill = PatternFill(start_color="ceeed0", end_color="ceeed0", fill_type="solid")  # Light green
+        red_fill   = PatternFill(start_color="f6c9ce", end_color="f6c9ce", fill_type="solid")  # Light red
+        red_text = Font(color="8f1b15")  # Dark red text
+        green_text = Font(color="285f17")  # Dark green text
+        # Area is the whole of B, D, F:
+        n = len(df) + 1
+        area = f"B2:B{n} D2:D{n} F2:F{n}"
+
+        # for col in ['B', 'D', 'F']:
+            # rule = Rule(
+            #     type="containsText",
+            #     operator="containsText",
+            #     text="yes",
+            #     dxf=DifferentialStyle(
+            #         fill=PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+            #     )
+            # )
+
+        rule = CellIsRule(operator="equal", formula=['"yes"'], stopIfTrue=True, fill=green_fill, font=green_text)
+        worksheet.conditional_formatting.add(area, rule)
+
+        rule = CellIsRule(operator="equal", formula=['"no"'], stopIfTrue=True, fill=red_fill, font=red_text)
+        worksheet.conditional_formatting.add(area, rule)
+        # workbook.save(output_filename)
+
+
     # Zeige eine Vorschau der ersten paar Zeilen
     print("\nVorschau der ersten 3 Zeilen:")
     print(df.head(3).to_string(index=False))
