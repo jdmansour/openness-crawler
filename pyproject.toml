@@ -12,6 +12,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pandas>=2.3.0",
     "pdfplumber>=0.11.7",
+    "pytest>=8.4.1",
     "requests>=2.32.4",
 ]
 
@@ -19,7 +20,13 @@ dependencies = [
 dev = [
     "google-api-python-client-stubs>=1.29.0",
     "pylint>=3.3.7",
+    "pylint-pytest>=1.1.7",
     "ruff>=0.12.1",
+]
+
+[tool.pylint]
+load-plugins = [
+    "pylint_pytest",
 ]
 
 [tool.pylint."messages control"]
@@ -28,4 +35,5 @@ disable = [
     # We use pyright for type checking,
     # pylint gets some things wrong
     "no-member",
+    "not-callable",
 ]

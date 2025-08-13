@@ -29,7 +29,7 @@ def record_results(func, *args, **kwargs):
     kwargs['cache_return_info'] = True
     # call wrapped function
     inner_result = yield args, kwargs
-    print("Inner result:", inner_result)
+    # print("Inner result:", inner_result)
     result, cache_hit = inner_result
 
     if isinstance(result, BaseModel):
