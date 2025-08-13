@@ -26,7 +26,8 @@ logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 # logging.getLogger('cache_results').setLevel(logging.DEBUG)
 
-
+# import litellm
+# litellm._turn_on_debug()
 
 
 
