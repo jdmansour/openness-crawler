@@ -5,6 +5,8 @@ Dieses Repo enthält eine erste version des Scrapers, welches das Kriterium "Wir
 
 Das Skript benötigt eine Liste der Institutionen, welche in einem gesonderten Repository gepflegt wird (TODO: wird noch hochgeladen).
 
+API-Keys für Google müssen in einer .env-Datei hinterlegt werden (TODO: dokumentieren).
+
 Verwendung:
 
     # generiert results_new.jsonlines
