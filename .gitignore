@@ -17,3 +17,6 @@ wheels/
 /attic/
 /results/
 ~$*
+
+# cache files
+*.pkl
