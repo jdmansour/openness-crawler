@@ -80,6 +80,8 @@ def read_universities(filename: str) -> list[UniversityDict]:
             unis.append(dict(website=website, name=row["Hochschulname"]))
             # unis.append((website, row["Hochschulname"]))
 
+    # Make unique by name
+    unis = list({uni["name"]: uni for uni in unis}.values())
     return unis
 
 async def main():
@@ -126,6 +128,23 @@ async def main():
 
     prompt_template = "Finde heraus ob aus dem Text hervorgeht, dass {software} oder eine auf {software} basierende Software in der Einrichtung {einrichtung} genutzt wird. Antworte mit Wahr oder Falsch und gib eine kurze Begründung."
 
+    # Zähle alle Unis
+    total_unis = len(unis)
+    print(f"Total universities to process: {total_unis}")
+
+    # unique universities
+    unique_unis = {item["name"] for item in unis}
+    print(f"Total unique universities: {len(unique_unis)}")
+
+    # Zähle alle Unis die in combos_done sind
+    unis_done = []
+    for item in unis:
+        if (item["name"], "Moodle") in combos_done and (item["name"], "Ilias") in combos_done and (item["name"], "OpenOLAT") in combos_done:
+            unis_done.append(item)
+    total_unis_done = len(unis_done)
+    print(f"Total universities already processed: {total_unis_done}")
+
+    return
 
     for index, item in enumerate(unis):
         print(f"Processing {index + 1}/{len(unis)}: {item['name']} ({item['website']})")
