@@ -50,23 +50,24 @@ def main():
     print(f"Gefundene JSON-Objekte: {len(json_objects)}")
     
     for entry in json_objects:
-        print(f"Processing entry: {entry}")
         einrichtung = entry.get("einrichtung", "")
         software = entry.get("software", "")
         usage_found = entry.get("usage_found", False)
         reasoning = entry.get("reasoning", "")
+        print(f"Processing entry: {einrichtung}, {software}")
 
         if einrichtung and software:
             data[einrichtung][software]["usage_found"] = "yes" if usage_found else "no"
             data[einrichtung][software]["reasoning"] = reasoning
 
+    print("Gefundene Einrichtungen:", len(data))
 
-    for item in list(data.items())[:5]:
-        einrichtung, software_data = item
-        print(f"Einrichtung: {einrichtung}")
-        for software, details in software_data.items():
-            print(f"  Software: {software}, Nutzung: {details['usage_found']}, Begründung: {details['reasoning']}")
-        print()
+    # for item in list(data.items())[:5]:
+    #     einrichtung, software_data = item
+    #     print(f"Einrichtung: {einrichtung}")
+    #     for software, details in software_data.items():
+    #         print(f"  Software: {software}, Nutzung: {details['usage_found']}, Begründung: {details['reasoning']}")
+    #     print()
 
     # Excel-Export
     excel_filename = os.path.splitext(filename)[0] + "_report.xlsx"
@@ -156,9 +157,9 @@ def create_excel_report(data, output_filename: str):
         # workbook.save(output_filename)
 
 
-    # Zeige eine Vorschau der ersten paar Zeilen
-    print("\nVorschau der ersten 3 Zeilen:")
-    print(df.head(3).to_string(index=False))
+    # # Zeige eine Vorschau der ersten paar Zeilen
+    # print("\nVorschau der ersten 3 Zeilen:")
+    # print(df.head(3).to_string(index=False))
 
 if __name__ == "__main__":
     main()
