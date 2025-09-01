@@ -144,8 +144,6 @@ async def main():
     total_unis_done = len(unis_done)
     print(f"Total universities already processed: {total_unis_done}")
 
-    return
-
     for index, item in enumerate(unis):
         print(f"Processing {index + 1}/{len(unis)}: {item['name']} ({item['website']})")
         site = item["website"]
