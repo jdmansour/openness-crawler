@@ -1,6 +1,10 @@
 
 # Scraper für Offenheitskritierien
 
+> [!NOTE]  
+> Die aktuelle Version des Crawlers befindet sich hier:
+> https://github.com/jdmansour/openness-crawler-prefect
+
 Dieser Scraper ist im Rahmen einer Studie der Wikimedia Deutschland zum Thema "Offenheit" entstanden. Die Fragestellung ist, wie offen sind öffentliche Einrichtungen in Deutschland wirklich?
 
 Dazu wurde eine Liste von zu evaluierenden Einrichtungen erstellt, zusammen mit Kritieren für die verschiedenen Bereiche (Bildung, Kultur, Forschung, ...). Diese teilen sich in operative Kriterien (was ist die Praxis) und strategische Kriterien (z.B. was steht in einer Leitline).
